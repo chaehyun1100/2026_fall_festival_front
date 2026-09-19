@@ -47,11 +47,11 @@ export function useCreateLanternFlow({ lanternCount, onCreated, onFirstLantern }
       }
 
       if (code === 'BOOTH_NOT_FOUND' || code === 'DUPLICATE_BOOTH_LANTERN') {
-        throw { field: 'booth', message: serverMessage }
+        throw { field: 'booth', code, message: serverMessage }
       }
 
       // FORBIDDEN_WORD_DETECTED, INVALID_REQUEST_PARAM 등은 한마디 입력 필드 에러로 표시
-      throw { field: 'message', message: serverMessage }
+      throw { field: 'message', code, message: serverMessage }
     }
   }
 

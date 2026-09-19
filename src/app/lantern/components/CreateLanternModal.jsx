@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Modal from '../../../components/common/Modal'
+import AlertModal from '../../../components/common/AlertModal'
 import { getLanternBoothOptions } from '../../../api/lantern'
 
 const largeModalStyle = {
@@ -20,6 +21,7 @@ export default function CreateLanternModal({
   onClose,
   onSubmitSuccess,
   boothList = [],
+  usedBoothIds = [], // 오늘 이미 등불을 단 부스 ID 목록 — 드롭다운에서 재선택 방지용
   currentCount = 0, // 현재 작성한 등불 개수
 }) {
   const [selectedBooth, setSelectedBooth] = useState('');
@@ -27,6 +29,8 @@ export default function CreateLanternModal({
   const [content, setContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [isDuplicateBoothModalOpen, setIsDuplicateBoothModalOpen] = useState(false);
+  const [isForbiddenWordModalOpen, setIsForbiddenWordModalOpen] = useState(false);
   const [fetchedBoothList, setFetchedBoothList] = useState([]);
   const [isBoothListLoading, setIsBoothListLoading] = useState(false);
 
@@ -75,6 +79,16 @@ export default function CreateLanternModal({
     onClose();
   };
 
+  // 이미 등불을 단 부스를 다시 고르려고 하면 선택 자체를 막고 안내 모달을 띄운다
+  const handleBoothChange = (e) => {
+    const value = e.target.value;
+    if (usedBoothIds.includes(Number(value))) {
+      setIsDuplicateBoothModalOpen(true);
+      return;
+    }
+    setSelectedBooth(value);
+  };
+
   // 입력값 검증: 부스 선택 + 축제 한마디 작성 시에만 버튼 활성화
   const isValid = selectedBooth !== '' && content.trim().length > 0;
 
@@ -103,13 +117,20 @@ export default function CreateLanternModal({
       resetForm();
       onClose();
     } catch (err) {
-      setSubmitError(err?.message || '등불 등록에 실패했어요. 다시 시도해주세요.');
+      if (err?.code === 'DUPLICATE_BOOTH_LANTERN') {
+        setIsDuplicateBoothModalOpen(true);
+      } else if (err?.code === 'FORBIDDEN_WORD_DETECTED') {
+        setIsForbiddenWordModalOpen(true);
+      } else {
+        setSubmitError(err?.message || '등불 등록에 실패했어요. 다시 시도해주세요.');
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
+    <>
     <Modal isOpen={isOpen} onClose={handleClose} style={largeModalStyle}>
       {/* Header */}
       <div style={{ textAlign: 'left', width: '100%', marginBottom: '16px' }}>
@@ -130,7 +151,7 @@ export default function CreateLanternModal({
           </label>
           <select
             value={selectedBooth}
-            onChange={(e) => setSelectedBooth(e.target.value)}
+            onChange={handleBoothChange}
             style={{
               width: '100%',
               padding: '10px 12px',
@@ -256,5 +277,20 @@ export default function CreateLanternModal({
         </div>
       </form>
     </Modal>
+
+    <AlertModal
+      isOpen={isDuplicateBoothModalOpen}
+      onClose={() => setIsDuplicateBoothModalOpen(false)}
+      title="이미 등불을 단 부스에요."
+      subTitle="부스 선택을 변경해주세요."
+    />
+
+    <AlertModal
+      isOpen={isForbiddenWordModalOpen}
+      onClose={() => setIsForbiddenWordModalOpen(false)}
+      title="부적절한 표현이 포함되어 있어요"
+      subTitle="내용을 수정한 후 다시 등불을 등록해주세요"
+    />
+    </>
   );
 }
