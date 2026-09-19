@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Modal from '../../../components/common/Modal'
+import { getLanternBoothOptions } from '../../../api/lantern'
 
 const largeModalStyle = {
   display: 'flex',
@@ -24,12 +25,49 @@ export default function CreateLanternModal({
   const [selectedBooth, setSelectedBooth] = useState('');
   const [nickname, setNickname] = useState('');
   const [content, setContent] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [fetchedBoothList, setFetchedBoothList] = useState([]);
+  const [isBoothListLoading, setIsBoothListLoading] = useState(false);
+
+  // 모달이 열릴 때마다 당일 운영 부스 목록을 새로 받아온다 (지도팀 소관 GET /api/booths/,
+  // 여긴 부스 선택 드롭다운 전용으로만 사용 — place_type=BOOTH만 등불을 달 수 있음)
+  useEffect(() => {
+    if (!isOpen || boothList.length > 0) return;
+
+    let cancelled = false;
+    setIsBoothListLoading(true);
+
+    getLanternBoothOptions()
+      .then((res) => {
+        if (cancelled) return;
+        const booths = res.data?.data?.booths ?? [];
+        setFetchedBoothList(
+          booths
+            .filter((booth) => booth.place_type === 'BOOTH')
+            .map((booth) => ({ id: booth.booth_id, name: booth.name }))
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setFetchedBoothList([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsBoothListLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, boothList.length]);
+
+  const resolvedBoothList = boothList.length > 0 ? boothList : fetchedBoothList;
 
   // 폼 초기화
   const resetForm = () => {
     setSelectedBooth('');
     setNickname('');
     setContent('');
+    setSubmitError('');
   };
 
   const handleClose = () => {
@@ -40,9 +78,13 @@ export default function CreateLanternModal({
   // 입력값 검증: 부스 선택 + 축제 한마디 작성 시에만 버튼 활성화
   const isValid = selectedBooth !== '' && content.trim().length > 0;
 
-  const handleSubmit = (e) => {
+  // onSubmitSuccess는 부모(useCreateLanternFlow)에서 실제 등록 API를 호출하고,
+  // 실패 시 { field, message } 형태로 reject해서 인라인 에러로 보여준다.
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!isValid) return;
+    if (!isValid || isSubmitting) return;
+
+    if (!onSubmitSuccess) return;
 
     // 닉네임 안 적은 경우 '익명의 코끼리' 적용
     const finalNickname = nickname.trim() || '익명의 코끼리';
@@ -50,15 +92,21 @@ export default function CreateLanternModal({
     const lanternData = {
       boothId: selectedBooth,
       nickname: finalNickname,
-      content: content.trim(),
+      message: content.trim(),
     };
 
-    if (onSubmitSuccess) {
-      onSubmitSuccess(lanternData);
-    }
+    setIsSubmitting(true);
+    setSubmitError('');
 
-    resetForm();
-    onClose();
+    try {
+      await onSubmitSuccess(lanternData);
+      resetForm();
+      onClose();
+    } catch (err) {
+      setSubmitError(err?.message || '등불 등록에 실패했어요. 다시 시도해주세요.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -96,22 +144,13 @@ export default function CreateLanternModal({
             }}
           >
             <option value="" disabled hidden>
-              부스를 선택해주세요
+              {isBoothListLoading ? '부스 목록을 불러오는 중...' : '부스를 선택해주세요'}
             </option>
-            {boothList.length > 0 ? (
-              boothList.map((booth) => (
-                <option key={booth.id} value={booth.id} style={{ color: '#111' }}>
-                  {booth.name}
-                </option>
-              ))
-            ) : (
-              // 일단 부스 더미데이터로 넣어놓음
-              <>
-                <option value="booth1" style={{ color: '#111' }}>맛있는 타코야키 부스</option>
-                <option value="booth2" style={{ color: '#111' }}>컴퓨터공학과 체험 부스</option>
-                <option value="booth3" style={{ color: '#111' }}>중앙 동아리 밴드 공연 부스</option>
-              </>
-            )}
+            {resolvedBoothList.map((booth) => (
+              <option key={booth.id} value={booth.id} style={{ color: '#111' }}>
+                {booth.name}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -172,6 +211,10 @@ export default function CreateLanternModal({
           ⓘ 등불은 하루 최대 3개까지 달 수 있어요. 삭제한 등불도 횟수에 포함돼요.
         </p>
 
+        {submitError && (
+          <p style={{ fontSize: '11px', color: '#e53935', margin: 0 }}>{submitError}</p>
+        )}
+
         {/* Footer 버튼 */}
         <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
           <button
@@ -194,21 +237,21 @@ export default function CreateLanternModal({
           
           <button
             type="submit"
-            disabled={!isValid}
+            disabled={!isValid || isSubmitting}
             style={{
               flex: 1,
               padding: '12px',
-              backgroundColor: isValid ? '#1e1e1e' : '#ccc',
+              backgroundColor: isValid && !isSubmitting ? '#1e1e1e' : '#ccc',
               border: 'none',
               borderRadius: '14px',
               fontWeight: 'bold',
               fontSize: '14px',
               color: '#ffffff',
-              cursor: isValid ? 'pointer' : 'not-allowed',
+              cursor: isValid && !isSubmitting ? 'pointer' : 'not-allowed',
               transition: 'background-color 0.2s',
             }}
           >
-            등불 달기
+            {isSubmitting ? '등록 중...' : '등불 달기'}
           </button>
         </div>
       </form>
