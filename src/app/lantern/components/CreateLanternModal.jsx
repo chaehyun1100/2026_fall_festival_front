@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import Modal from '../../../components/common/Modal'
 
+// boothList가 비어있을 때(개발 중) 대신 보여주는 더미 부스 — 실제 옵션 렌더링과 boothName 조회가 같은 목록을 봐야 하므로 배열로 분리
+const dummyBooths = [
+  { id: 'booth1', name: '맛있는 타코야키 부스' },
+  { id: 'booth2', name: '컴퓨터공학과 체험 부스' },
+  { id: 'booth3', name: '중앙 동아리 밴드 공연 부스' },
+];
+
 const largeModalStyle = {
   display: 'flex',
   width: '305px',
@@ -37,6 +44,8 @@ export default function CreateLanternModal({
     onClose();
   };
 
+  const boothOptions = boothList.length > 0 ? boothList : dummyBooths;
+
   // 입력값 검증: 부스 선택 + 축제 한마디 작성 시에만 버튼 활성화
   const isValid = selectedBooth !== '' && content.trim().length > 0;
 
@@ -44,12 +53,17 @@ export default function CreateLanternModal({
     e.preventDefault();
     if (!isValid) return;
 
-    // 닉네임 안 적은 경우 '익명의 코끼리' 적용
-    const finalNickname = nickname.trim() || '익명의 코끼리';
+    // 카드/수정 모달에 부스명을 보여주려면 id뿐 아니라 이름도 같이 저장해둬야 함
+    const selectedBoothName = boothOptions.find(
+      (booth) => String(booth.id) === String(selectedBooth)
+    )?.name;
 
+    // 닉네임은 빈 값 그대로 저장 — '익명의 코끼리'는 표시 전용 fallback이라 저장하지 않음
+    // (nickname 컬럼이 VARCHAR(5)라 7글자인 '익명의 코끼리'는 애초에 저장할 수 없음)
     const lanternData = {
       boothId: selectedBooth,
-      nickname: finalNickname,
+      boothName: selectedBoothName,
+      nickname: nickname.trim(),
       content: content.trim(),
     };
 
@@ -98,20 +112,11 @@ export default function CreateLanternModal({
             <option value="" disabled hidden>
               부스를 선택해주세요
             </option>
-            {boothList.length > 0 ? (
-              boothList.map((booth) => (
-                <option key={booth.id} value={booth.id} style={{ color: '#111' }}>
-                  {booth.name}
-                </option>
-              ))
-            ) : (
-              // 일단 부스 더미데이터로 넣어놓음
-              <>
-                <option value="booth1" style={{ color: '#111' }}>맛있는 타코야키 부스</option>
-                <option value="booth2" style={{ color: '#111' }}>컴퓨터공학과 체험 부스</option>
-                <option value="booth3" style={{ color: '#111' }}>중앙 동아리 밴드 공연 부스</option>
-              </>
-            )}
+            {boothOptions.map((booth) => (
+              <option key={booth.id} value={booth.id} style={{ color: '#111' }}>
+                {booth.name}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -128,7 +133,7 @@ export default function CreateLanternModal({
             maxLength={5}
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
-            placeholder="입력 안 한 경우 → 익명의 코끼리"
+            placeholder="닉네임을 입력해주세요"
             style={{
               width: '100%',
               padding: '10px 12px',
@@ -154,7 +159,7 @@ export default function CreateLanternModal({
             rows={3}
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="축제 한 마디를 적어주세요"
+            placeholder="응원의 한마디를 남겨주세요"
             style={{
               width: '100%',
               padding: '10px 12px',

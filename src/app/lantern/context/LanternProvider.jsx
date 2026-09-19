@@ -27,10 +27,10 @@ export function LanternProvider({ children }) {
       prev.map((item) => (item.id === id ? { ...item, isDeleted: true } : item))
     )
 
-  const editLantern = (id, newContent) =>
+  const editLantern = (id, { nickname, message }) =>
     setLanterns((prev) =>
       prev.map((item) =>
-        item.id === id ? { ...item, message: newContent, content: newContent } : item
+        item.id === id ? { ...item, nickname, message, content: message } : item
       )
     )
 
